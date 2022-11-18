@@ -2,6 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import "../main.dart";
 import "dart:developer";
+import 'package:tflite/tflite.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({Key? key}) : super(key: key);
@@ -12,7 +13,8 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
   late CameraController controller;
-
+  late CameraImage cameraImage;
+  String output = '';
   void onNewCameraSelected(CameraDescription cameraDescription) async {
     controller = CameraController(cameraDescription, ResolutionPreset.high,
         imageFormatGroup: ImageFormatGroup.jpeg);
@@ -21,7 +23,12 @@ class _CameraScreenState extends State<CameraScreen>
       if (!mounted) {
         return;
       }
-      setState(() {});
+      setState(() {
+        controller.startImageStream((image) {
+          cameraImage = image;
+          runModel();
+        });
+      });
     }).catchError((Object e) {
       if (e is CameraException) {
         switch (e.code) {
@@ -34,6 +41,34 @@ class _CameraScreenState extends State<CameraScreen>
         }
       }
     });
+  }
+
+  runModel() async {
+    if (cameraImage != null) {
+      var predictions = await Tflite.runModelOnFrame(
+        bytesList: cameraImage.planes.map((plane) {
+          return plane.bytes;
+        }).toList(),
+        imageHeight: cameraImage.height,
+        imageWidth: cameraImage.width,
+        imageMean: 127.5,
+        imageStd: 127.5,
+        rotation: 90,
+        threshold: 0.1,
+        numResults: 2,
+        asynch: true,
+      );
+      for (var element in predictions!) {
+        setState(() {
+          output = element['label'];
+        });
+      }
+    }
+  }
+
+  loadModel() async {
+    await Tflite.loadModel(
+        model: "assets/model.tflite", labels: "assets/labels.txt");
   }
 
   @override
@@ -56,8 +91,9 @@ class _CameraScreenState extends State<CameraScreen>
 
   @override
   void initState() {
-    onNewCameraSelected(cameras[0]);
     super.initState();
+    onNewCameraSelected(cameras[0]);
+    loadModel();
   }
 
   @override
@@ -69,12 +105,17 @@ class _CameraScreenState extends State<CameraScreen>
   @override
   Widget build(BuildContext context) {
     if (!controller.value.isInitialized) {
-      return const Center(
-        child: Text(
-          'LOADING',
-          style: TextStyle(color: Colors.white),
-        ),
-      );
+      return const Scaffold(
+          backgroundColor: Colors.black,
+          body: Center(
+            child: Text(
+              'Loading',
+              style: TextStyle(
+                  fontSize: 30,
+                  decoration: TextDecoration.none,
+                  color: Colors.white),
+            ),
+          ));
     }
 
     return MaterialApp(
@@ -90,6 +131,7 @@ class _CameraScreenState extends State<CameraScreen>
               height: 100,
             ),
           ),
+          Text(output, style: const TextStyle(fontWeight: FontWeight.bold)),
           Positioned(
             bottom: 20,
             left: 20,
