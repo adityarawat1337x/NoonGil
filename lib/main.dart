@@ -1,19 +1,19 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'screens/camera_screen.dart';
+import 'dart:developer';
 
-List<CameraDescription> cameras = [];
+late List<CameraDescription> cameras;
 
 Future<void> main() async {
   // Fetch the available cameras before initializing the app.
   try {
     WidgetsFlutterBinding.ensureInitialized();
     cameras = await availableCameras();
-    print(cameras);
   } on CameraException catch (e) {
-    print('Error in fetching the cameras: $e');
+    log('Error in fetching the cameras: $e');
   }
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
       ),
       debugShowCheckedModeBanner: false,
-      home: CameraScreen(),
+      home: const CameraScreen(),
     );
   }
 }
