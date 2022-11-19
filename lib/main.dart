@@ -23,9 +23,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Noongil',
-      theme: ThemeData(
-        primarySwatch: Colors.deepPurple,
-      ),
+      color: Colors.white,
+      theme: ThemeData(primarySwatch: Colors.deepPurple),
       debugShowCheckedModeBanner: false,
       home: const CameraScreen(),
     );

@@ -14,20 +14,20 @@ class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
   late CameraController controller;
   late CameraImage cameraImage;
-  String output = '';
+  String output = 'detecting...';
+
   void onNewCameraSelected(CameraDescription cameraDescription) async {
     controller = CameraController(cameraDescription, ResolutionPreset.high,
         imageFormatGroup: ImageFormatGroup.jpeg);
 
     controller.initialize().then((_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
+
       setState(() {
-        controller.startImageStream((image) {
-          cameraImage = image;
-          runModel();
-        });
+        controller.startImageStream((image) => {
+              cameraImage = image,
+              runModel(),
+            });
       });
     }).catchError((Object e) {
       if (e is CameraException) {
@@ -44,31 +44,39 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   runModel() async {
-    if (cameraImage != null) {
-      var predictions = await Tflite.runModelOnFrame(
+    var recognitions = await Tflite.detectObjectOnFrame(
         bytesList: cameraImage.planes.map((plane) {
           return plane.bytes;
-        }).toList(),
+        }).toList(), // required
         imageHeight: cameraImage.height,
         imageWidth: cameraImage.width,
-        imageMean: 127.5,
-        imageStd: 127.5,
-        rotation: 90,
-        threshold: 0.1,
-        numResults: 2,
-        asynch: true,
-      );
-      for (var element in predictions!) {
-        setState(() {
-          output = element['label'];
-        });
-      }
+        imageMean: 0, // defaults to 127.5
+        imageStd: 255.0, // defaults to 127.5
+        threshold: 0.4, // defaults to 0.1
+        numResultsPerClass: 1, // defaults to 5
+        blockSize: 32, // defaults to 32
+        numBoxesPerBlock: 5, // defaults to 5
+        asynch: true // defaults to true
+        );
+
+    for (var element in recognitions!) {
+      print("ffffffffffffffffffffff");
+      print(element);
+      setState(() {
+        output = element['label'];
+      });
     }
   }
 
-  loadModel() async {
+  Future loadModel() async {
+    Tflite.close();
+
     await Tflite.loadModel(
-        model: "assets/model.tflite", labels: "assets/labels.txt");
+        model: "assets/model.tflite",
+        labels: "assets/labels.txt",
+        numThreads: 1,
+        isAsset: true,
+        useGpuDelegate: false);
   }
 
   @override
@@ -92,12 +100,14 @@ class _CameraScreenState extends State<CameraScreen>
   @override
   void initState() {
     super.initState();
-    onNewCameraSelected(cameras[0]);
+    onNewCameraSelected(cameras[1]);
     loadModel();
   }
 
   @override
   void dispose() {
+    controller.stopImageStream();
+    Tflite.close();
     controller.dispose();
     super.dispose();
   }
@@ -131,7 +141,19 @@ class _CameraScreenState extends State<CameraScreen>
               height: 100,
             ),
           ),
-          Text(output, style: const TextStyle(fontWeight: FontWeight.bold)),
+          // ignore: prefer_const_constructors
+          Positioned(
+            bottom: 40,
+            left: 100,
+            width: 350,
+            height: 100,
+            // ignore: prefer_const_constructors
+            child: Text(
+              output,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
           Positioned(
             bottom: 20,
             left: 20,
