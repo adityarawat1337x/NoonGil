@@ -139,25 +139,75 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
-    List<Widget> list = [];
-
-    list.add(
-      Positioned(
-        top: 0.0,
-        left: 0.0,
-        width: size.width,
-        height: size.height - 100,
-        child: Container(
-          height: size.height - 100,
-          child: (!cameraController.value.isInitialized)
-              ? new Container()
-              : AspectRatio(
-                  aspectRatio: cameraController.value.aspectRatio,
-                  child: CameraPreview(cameraController),
-                ),
+    List<Widget> list = [
+      CameraPreview(cameraController),
+      //?[AIM]
+      Center(
+        child: Image.asset(
+          'assets/camera_aim.png',
+          color: Colors.white,
+          width: 100,
+          height: 100,
         ),
       ),
-    );
+      //?[OUTPUT]
+      // Positioned(
+      //   bottom: 40,
+      //   left: 100,
+      //   width: 350,
+      //   height: 100,
+      //   child: Text(
+      //     "output",
+      //     style:
+      //         const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      //   ),
+      // ),
+      //![NAVBAR BORDER]
+      Positioned(
+        bottom: 20,
+        left: 20,
+        width: 350,
+        height: 100,
+        child: Container(
+          height: 50,
+          decoration: const BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.all(Radius.circular(30)),
+            border: Border(
+              bottom: BorderSide(color: Colors.white, width: 3),
+              left: BorderSide(color: Colors.white, width: 3),
+              right: BorderSide(color: Colors.white, width: 3),
+              top: BorderSide(color: Colors.white, width: 3),
+            ),
+          ),
+        ),
+      ),
+      // ![NAVBAR]
+      Positioned(
+          bottom: 30,
+          left: 30,
+          width: 330,
+          height: 80,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white70,
+              borderRadius: BorderRadius.all(
+                Radius.circular(20),
+              ),
+            ),
+            child: Center(
+              child: ClipRRect(
+                  borderRadius: BorderRadius.circular(100),
+                  child: Image.asset(
+                    'assets/loader.gif',
+                    fit: BoxFit.cover,
+                    height: 50,
+                    width: 50,
+                  )),
+            ),
+          )),
+    ];
+//    list.add();
 
     if (cameraImage != null) {
       list.addAll(displayBoxesAroundRecognizedObjects(size));
