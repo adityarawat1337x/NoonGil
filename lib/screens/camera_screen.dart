@@ -14,20 +14,23 @@ class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
   late CameraController controller;
   late CameraImage cameraImage;
-  String output = 'detecting...';
+  bool predicting = false;
+  String output = '';
+  List recognitionsList = [];
 
   void onNewCameraSelected(CameraDescription cameraDescription) async {
     controller = CameraController(cameraDescription, ResolutionPreset.high,
         imageFormatGroup: ImageFormatGroup.jpeg);
 
     controller.initialize().then((_) {
-      if (!mounted) return;
-
+      if (!mounted) {
+        return;
+      }
       setState(() {
-        controller.startImageStream((image) => {
-              cameraImage = image,
-              runModel(),
-            });
+        controller.startImageStream((image) {
+          cameraImage = image;
+          runModel();
+        });
       });
     }).catchError((Object e) {
       if (e is CameraException) {
@@ -44,33 +47,26 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   runModel() async {
-    var recognitions = await Tflite.detectObjectOnFrame(
-        bytesList: cameraImage.planes.map((plane) {
-          return plane.bytes;
-        }).toList(), // required
-        imageHeight: cameraImage.height,
-        imageWidth: cameraImage.width,
-        imageMean: 0, // defaults to 127.5
-        imageStd: 255.0, // defaults to 127.5
-        threshold: 0.4, // defaults to 0.1
-        numResultsPerClass: 1, // defaults to 5
-        blockSize: 32, // defaults to 32
-        numBoxesPerBlock: 5, // defaults to 5
-        asynch: true // defaults to true
-        );
-
-    for (var element in recognitions!) {
-      print("ffffffffffffffffffffff");
-      print(element);
-      setState(() {
-        output = element['label'];
-      });
-    }
+    if (predicting || !mounted) return;
+    predicting = true;
+    recognitionsList = (await Tflite.detectObjectOnFrame(
+      bytesList: cameraImage.planes.map((plane) {
+        return plane.bytes;
+      }).toList(),
+      imageHeight: cameraImage.height,
+      imageWidth: cameraImage.width,
+      imageMean: 127.5,
+      imageStd: 127.5,
+      numResultsPerClass: 1,
+      threshold: 0.4,
+    ))!;
+    predicting = false;
+    setState(() {
+      cameraImage;
+    });
   }
 
   Future loadModel() async {
-    Tflite.close();
-
     await Tflite.loadModel(
         model: "assets/model.tflite",
         labels: "assets/labels.txt",
@@ -100,16 +96,45 @@ class _CameraScreenState extends State<CameraScreen>
   @override
   void initState() {
     super.initState();
-    onNewCameraSelected(cameras[1]);
     loadModel();
+    onNewCameraSelected(cameras[0]);
   }
 
   @override
   void dispose() {
-    controller.stopImageStream();
-    Tflite.close();
     controller.dispose();
+    Tflite.close();
     super.dispose();
+  }
+
+  List<Widget> displayBoxesAroundRecognizedObjects(Size screen) {
+    double factorX = screen.width;
+    double factorY = screen.height;
+
+    Color colorPick = Colors.pink;
+
+    return recognitionsList!.map((result) {
+      return Positioned(
+        left: result["rect"]["x"] * factorX,
+        top: result["rect"]["y"] * factorY,
+        width: result["rect"]["w"] * factorX,
+        height: result["rect"]["h"] * factorY,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.all(Radius.circular(10.0)),
+            border: Border.all(color: Colors.pink, width: 2.0),
+          ),
+          child: Text(
+            "${result['detectedClass']} ${(result['confidenceInClass'] * 100).toStringAsFixed(0)}%",
+            style: TextStyle(
+              background: Paint()..color = colorPick,
+              color: Colors.black,
+              fontSize: 18.0,
+            ),
+          ),
+        ),
+      );
+    }).toList();
   }
 
   @override
@@ -127,77 +152,113 @@ class _CameraScreenState extends State<CameraScreen>
             ),
           ));
     }
+    Size size = MediaQuery.of(context).size;
+    List<Widget> list = [];
 
-    return MaterialApp(
-        home: CameraPreview(
-      controller,
-      child: Stack(
-        children: [
-          Center(
-            child: Image.asset(
-              'assets/camera_aim.png',
-              color: Colors.white,
-              width: 100,
-              height: 100,
-            ),
-          ),
-          // ignore: prefer_const_constructors
-          Positioned(
-            bottom: 40,
-            left: 100,
-            width: 350,
-            height: 100,
-            // ignore: prefer_const_constructors
-            child: Text(
-              output,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-          Positioned(
-            bottom: 20,
-            left: 20,
-            width: 350,
-            height: 100,
-            child: Container(
-              height: 50,
-              decoration: const BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.all(Radius.circular(30)),
-                border: Border(
-                  bottom: BorderSide(color: Colors.white, width: 3),
-                  left: BorderSide(color: Colors.white, width: 3),
-                  right: BorderSide(color: Colors.white, width: 3),
-                  top: BorderSide(color: Colors.white, width: 3),
+    list.add(
+      Positioned(
+        top: 0.0,
+        left: 0.0,
+        width: size.width,
+        height: size.height - 100,
+        child: Container(
+          height: size.height - 100,
+          child: (!controller.value.isInitialized)
+              ? new Container()
+              : AspectRatio(
+                  aspectRatio: controller.value.aspectRatio,
+                  child: CameraPreview(controller),
                 ),
-              ),
-            ),
-          ),
-          Positioned(
-              bottom: 30,
-              left: 30,
-              width: 330,
-              height: 80,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white70,
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(20),
-                  ),
-                ),
-                child: Center(
-                  child: ClipRRect(
-                      borderRadius: BorderRadius.circular(100),
-                      child: Image.asset(
-                        'assets/loader.gif',
-                        fit: BoxFit.cover,
-                        height: 50,
-                        width: 50,
-                      )),
-                ),
-              )),
-        ],
+        ),
       ),
-    ));
+    );
+
+    if (cameraImage != null) {
+      list.addAll(displayBoxesAroundRecognizedObjects(size));
+    }
+
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Container(
+          margin: EdgeInsets.only(top: 50),
+          color: Colors.black,
+          child: Stack(
+            children: list,
+          ),
+        ),
+      ),
+    );
+    //   return MaterialApp(
+    //       home: CameraPreview(
+    //     controller,
+    //     child: Stack(
+    //       children: [
+    //         Center(
+    //           child: Image.asset(
+    //             'assets/camera_aim.png',
+    //             color: Colors.white,
+    //             width: 100,
+    //             height: 100,
+    //           ),
+    //         ),
+    //         // ignore: prefer_const_constructors
+    //         Positioned(
+    //           bottom: 40,
+    //           left: 100,
+    //           width: 350,
+    //           height: 100,
+    //           // ignore: prefer_const_constructors
+    //           child: Text(
+    //             output,
+    //             style: const TextStyle(
+    //                 color: Colors.white, fontWeight: FontWeight.bold),
+    //           ),
+    //         ),
+    //         Positioned(
+    //           bottom: 20,
+    //           left: 20,
+    //           width: 350,
+    //           height: 100,
+    //           child: Container(
+    //             height: 50,
+    //             decoration: const BoxDecoration(
+    //               color: Colors.transparent,
+    //               borderRadius: BorderRadius.all(Radius.circular(30)),
+    //               border: Border(
+    //                 bottom: BorderSide(color: Colors.white, width: 3),
+    //                 left: BorderSide(color: Colors.white, width: 3),
+    //                 right: BorderSide(color: Colors.white, width: 3),
+    //                 top: BorderSide(color: Colors.white, width: 3),
+    //               ),
+    //             ),
+    //           ),
+    //         ),
+    //         Positioned(
+    //             bottom: 30,
+    //             left: 30,
+    //             width: 330,
+    //             height: 80,
+    //             child: Container(
+    //               decoration: const BoxDecoration(
+    //                 color: Colors.white70,
+    //                 borderRadius: BorderRadius.all(
+    //                   Radius.circular(20),
+    //                 ),
+    //               ),
+    //               child: Center(
+    //                 child: ClipRRect(
+    //                     borderRadius: BorderRadius.circular(100),
+    //                     child: Image.asset(
+    //                       'assets/loader.gif',
+    //                       fit: BoxFit.cover,
+    //                       height: 50,
+    //                       width: 50,
+    //                     )),
+    //               ),
+    //             )),
+    //       ],
+    //     ),
+    //   ));
   }
 }
